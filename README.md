@@ -21,6 +21,7 @@ cold-mail-bot/
 ├── .env.example       # Template for required environment variables
 ├── .gitignore          # Ignores secrets, database, virtual environment
 ├── db_setup.py         # Initializes the leads table schema in SQLite
+├── import_leads.py     # Imports leads from CSV with duplicate detection
 ├── mailer.py           # Sends emails to 'new' leads and logs Message-IDs
 ├── reply_tracker.py    # Monitors IMAP for replies and marks them 'replied'
 ├── report.py           # Displays aggregated outreach metrics and response rates
@@ -66,9 +67,15 @@ EMAIL_APP_PASSWORD=your_16_char_app_password
 python db_setup.py
 ```
 
-### 2. Seed Test Leads
+### 2. Seed Test Leads or Import from CSV
+Seed sample data:
 ```bash
 python seed.py
+```
+
+Or import from a CSV file:
+```bash
+python import_leads.py leads.csv
 ```
 
 ### 3. Check Database Records
