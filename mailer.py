@@ -1,4 +1,5 @@
 import os
+import random
 import smtplib
 import sqlite3
 import sys
@@ -11,12 +12,34 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "leads.db")
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "template.txt")
 ATTACHMENT_PATH = "cv.pdf"
+DAILY_SEND_LIMIT = 20
 
 
 load_dotenv(ENV_PATH)
 
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "").strip()
 EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD", "").replace(" ", "").strip()
+
+
+def get_today_sent_count(cursor=None):
+    close_conn = False
+    if cursor is None:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        close_conn = True
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM leads 
+        WHERE status = 'emailed' 
+          AND (date(sent_at) = date('now', 'localtime') OR date(sent_at, 'localtime') = date('now', 'localtime'))
+    """)
+    count = cursor.fetchone()[0]
+
+    if close_conn:
+        conn.close()
+
+    return count
+
 
 
 def load_template(template_path=TEMPLATE_PATH):
@@ -43,8 +66,9 @@ def load_template(template_path=TEMPLATE_PATH):
     return subject_template, body_template
 
 
-def run_mailer(delay_seconds=5, template_path=TEMPLATE_PATH):
+def run_mailer(delay_seconds=None, template_path=TEMPLATE_PATH, daily_send_limit=None):
     subject_template, body_template = load_template(template_path)
+    limit = DAILY_SEND_LIMIT if daily_send_limit is None else daily_send_limit
 
     if not EMAIL_ADDRESS or not EMAIL_APP_PASSWORD:
         print("Error: EMAIL_ADDRESS and EMAIL_APP_PASSWORD must be configured in .env file.")
@@ -63,6 +87,12 @@ def run_mailer(delay_seconds=5, template_path=TEMPLATE_PATH):
         return
 
     print(f"Found {len(new_leads)} new lead(s) to process.")
+
+    today_count = get_today_sent_count(cursor)
+    if today_count >= limit:
+        print(f"Daily send limit reached ({limit}). Stopping for today.")
+        conn.close()
+        return
 
     try:
         smtp = smtplib.SMTP_SSL("smtp.gmail.com", 465)
@@ -86,6 +116,11 @@ def run_mailer(delay_seconds=5, template_path=TEMPLATE_PATH):
         return
 
     for idx, (lead_id, company, contact_email) in enumerate(new_leads, start=1):
+        today_count = get_today_sent_count(cursor)
+        if today_count >= limit:
+            print(f"Daily send limit reached ({limit}). Stopping for today.")
+            break
+
         company_name = company or ""
         subject = subject_template.replace("{company}", company_name)
         body = body_template.replace("{company}", company_name)
@@ -126,16 +161,24 @@ def run_mailer(delay_seconds=5, template_path=TEMPLATE_PATH):
             print(f"[{idx}/{len(new_leads)}] Sent to {contact_email} (Message-ID: {msg_id})")
 
             cursor.execute(
-                "UPDATE leads SET status = 'emailed', sent_at = datetime('now'), thread_id = ? WHERE id = ?",
+                "UPDATE leads SET status = 'emailed', sent_at = datetime('now', 'localtime'), thread_id = ? WHERE id = ?",
                 (msg_id, lead_id),
             )
             conn.commit()
+
+            today_count = get_today_sent_count(cursor)
+            print(f"Sent {today_count}/{limit} today")
+
+            if today_count >= limit:
+                print(f"Daily send limit reached ({limit}). Stopping for today.")
+                break
         except Exception as e:
             print(f"Error sending email to {contact_email}: {e}")
 
         if idx < len(new_leads):
-            print(f"Waiting {delay_seconds}s before next email...")
-            time.sleep(delay_seconds)
+            delay = random.randint(30, 90) if delay_seconds is None else delay_seconds
+            print(f"Waiting {delay}s before next email...")
+            time.sleep(delay)
 
     smtp.quit()
     conn.close()
