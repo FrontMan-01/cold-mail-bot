@@ -1,0 +1,5 @@
+Stripe
+Linear
+Vercel
+Supabase
+Figma

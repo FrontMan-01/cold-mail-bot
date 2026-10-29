@@ -6,16 +6,27 @@ import sys
 import time
 from email.message import EmailMessage
 from email.utils import make_msgid
-from dotenv import load_dotenv
-
 DB_PATH = os.path.join(os.path.dirname(__file__), "leads.db")
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "template.txt")
 ATTACHMENT_PATH = "cv.pdf"
 DAILY_SEND_LIMIT = 20
 
-
-load_dotenv(ENV_PATH)
+# Load environment variables with fallback
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ENV_PATH)
+except ImportError:
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
 
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "").strip()
 EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD", "").replace(" ", "").strip()
@@ -30,7 +41,7 @@ def get_today_sent_count(cursor=None):
 
     cursor.execute("""
         SELECT COUNT(*) FROM leads 
-        WHERE status = 'emailed' 
+        WHERE sent_at IS NOT NULL 
           AND (date(sent_at) = date('now', 'localtime') OR date(sent_at, 'localtime') = date('now', 'localtime'))
     """)
     count = cursor.fetchone()[0]
@@ -105,9 +116,10 @@ def run_mailer(delay_seconds=None, template_path=TEMPLATE_PATH, daily_send_limit
         print(" 1. Did you generate an 'App Password' (not your standard Google account password)?")
         print("    -> Go to: https://myaccount.google.com/apppasswords")
         print(" 2. Make sure 2-Step Verification is turned ON on this Google account.")
-        print(" 3. If you have multiple Google accounts logged into your browser, ensure you created")
-        print("    the App Password under 'vishesh.0743@gmail.com', not another profile.")
-        print(" 4. Paste the 16-character code into /home/jhabba/cold-mail-bot/.env")
+        account_hint = EMAIL_ADDRESS if EMAIL_ADDRESS else "your account email"
+        print(f" 3. If you have multiple Google accounts logged into your browser, ensure you created")
+        print(f"    the App Password under '{account_hint}', not another profile.")
+        print(" 4. Paste the 16-character code into .env file")
         conn.close()
         return
     except Exception as e:

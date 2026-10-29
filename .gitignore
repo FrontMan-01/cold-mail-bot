@@ -6,9 +6,9 @@
 *.sqlite3
 
 # Python Virtual Environment
-venv/
-.venv/
-env/
+venv
+.venv
+env
 
 # Python Cache
 __pycache__/
