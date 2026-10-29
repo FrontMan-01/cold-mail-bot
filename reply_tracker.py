@@ -164,7 +164,13 @@ def track_replies(max_recent_check=50):
             # Check if any pending thread_id appears in In-Reply-To or References
             for tid, lead in list(thread_to_lead.items()):
                 lead_id, company, contact_email, orig_thread_id = lead
-                if tid in in_reply_to or tid in references:
+                if not tid or len(tid) < 5:
+                    continue
+
+                sender_match = contact_email.lower() in from_addr.lower() if contact_email else False
+                thread_match = tid in in_reply_to or tid in references
+
+                if thread_match and sender_match:
                     print(f"\n[MATCH FOUND] Lead #{lead_id} ({company} - {contact_email})")
                     print(f"  Subject: {subject}")
                     print(f"  From: {from_addr}")

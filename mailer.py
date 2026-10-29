@@ -138,9 +138,11 @@ def run_mailer(delay_seconds=None, template_path=TEMPLATE_PATH, daily_send_limit
         body = body_template.replace("{company}", company_name)
 
         msg = EmailMessage()
-        msg["Subject"] = subject
+        safe_subject = "".join(subject.splitlines()).strip()
+        safe_to = "".join(contact_email.splitlines()).strip()
+        msg["Subject"] = safe_subject
         msg["From"] = EMAIL_ADDRESS
-        msg["To"] = contact_email
+        msg["To"] = safe_to
         msg_id = make_msgid()
         msg["Message-ID"] = msg_id
 
